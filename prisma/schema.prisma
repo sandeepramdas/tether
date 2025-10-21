@@ -1,0 +1,703 @@
+// Tether - Universal Skills Marketplace Database Schema
+// This schema supports the complete platform architecture
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// USER MANAGEMENT
+// ============================================================================
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  phone     String?  @unique
+  password  String?  // nullable for OAuth users
+
+  // Profile Information
+  firstName       String?
+  lastName        String?
+  displayName     String?
+  avatar          String?
+  bio             String?
+  dateOfBirth     DateTime?
+
+  // Account Type
+  accountType     AccountType @default(INDIVIDUAL)
+  userType        UserType    @default(BOTH)
+
+  // Location
+  countryCode     String?
+  state           String?
+  city            String?
+  postalCode      String?
+  latitude        Float?
+  longitude       Float?
+  timezone        String      @default("UTC")
+
+  // Preferences
+  language        String      @default("en")
+  currency        String      @default("USD")
+  preferredRadius Int         @default(25) // km
+
+  // Verification Status
+  emailVerified    Boolean @default(false)
+  phoneVerified    Boolean @default(false)
+  identityVerified Boolean @default(false)
+
+  // Status
+  status      UserStatus @default(ACTIVE)
+
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  lastLoginAt DateTime?
+
+  // Relations
+  providerProfile      ProviderProfile?
+  jobPosts             JobPost[]
+  conversations1       Conversation[]      @relation("Participant1")
+  conversations2       Conversation[]      @relation("Participant2")
+  sentMessages         Message[]
+  bookingsAsSeeker     Booking[]           @relation("SeekerBookings")
+  reviewsGiven         Review[]            @relation("ReviewsGiven")
+  reviewsReceived      Review[]            @relation("ReviewsReceived")
+  notifications        Notification[]
+
+  @@index([email])
+  @@index([status])
+  @@index([city, countryCode])
+  @@map("users")
+}
+
+enum AccountType {
+  INDIVIDUAL
+  BUSINESS
+  ENTERPRISE
+}
+
+enum UserType {
+  PROVIDER
+  SEEKER
+  BOTH
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  DELETED
+}
+
+// ============================================================================
+// PROVIDER PROFILES
+// ============================================================================
+
+model ProviderProfile {
+  id                      String   @id @default(cuid())
+  userId                  String   @unique
+  user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Business Information
+  businessName            String?
+  businessRegistration    String?
+  taxId                   String?
+
+  // Professional Details
+  yearsOfExperience       Int?
+  tagline                 String?
+  description             String?
+
+  // Verification
+  backgroundCheckStatus   VerificationStatus @default(PENDING)
+  backgroundCheckDate     DateTime?
+  licenseVerified         Boolean            @default(false)
+  insuranceVerified       Boolean            @default(false)
+
+  // Availability
+  serviceRadius           Int      @default(25) // km
+  availableImmediate      Boolean  @default(false)
+  isOnlineProvider        Boolean  @default(false)
+  isOfflineProvider       Boolean  @default(false)
+
+  // Pricing
+  defaultHourlyRate       Float?
+  minimumCharge           Float?
+  acceptsBids             Boolean  @default(true)
+
+  // Performance Metrics (denormalized)
+  totalJobsCompleted      Int      @default(0)
+  totalEarnings           Float    @default(0)
+  averageRating           Float    @default(0)
+  totalReviews            Int      @default(0)
+  responseTimeMinutes     Int?
+  completionRate          Float    @default(0)
+
+  // Gamification
+  level                   ProviderLevel @default(BRONZE)
+  totalPoints             Int           @default(0)
+
+  // Status
+  status                  ProviderStatus @default(ACTIVE)
+
+  // Timestamps
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  // Relations
+  skills                  ProviderSkill[]
+  services                Service[]
+  bookings                Booking[]
+
+  @@index([userId])
+  @@index([averageRating])
+  @@index([level])
+  @@map("provider_profiles")
+}
+
+enum VerificationStatus {
+  PENDING
+  APPROVED
+  FAILED
+  EXPIRED
+}
+
+enum ProviderLevel {
+  BRONZE
+  SILVER
+  GOLD
+  PLATINUM
+  DIAMOND
+}
+
+enum ProviderStatus {
+  ACTIVE
+  PAUSED
+  SUSPENDED
+}
+
+// ============================================================================
+// SKILLS TAXONOMY
+// ============================================================================
+
+model Skill {
+  id          String   @id @default(cuid())
+  parentId    String?
+  parent      Skill?   @relation("SkillHierarchy", fields: [parentId], references: [id])
+  children    Skill[]  @relation("SkillHierarchy")
+
+  name        String
+  slug        String   @unique
+  description String?
+
+  level       Int      @default(0) // 0=root, 1=industry, 2=category, 3=specific
+  icon        String?
+
+  isActive    Boolean  @default(true)
+  requiresCertification Boolean @default(false)
+
+  // Usage Stats
+  providerCount Int     @default(0)
+  jobCount      Int     @default(0)
+
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  providers   ProviderSkill[]
+  services    Service[]
+  jobPosts    JobPost[]
+
+  @@index([slug])
+  @@index([parentId])
+  @@index([isActive])
+  @@map("skills")
+}
+
+model ProviderSkill {
+  id          String   @id @default(cuid())
+  providerId  String
+  provider    ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  skillId     String
+  skill       Skill    @relation(fields: [skillId], references: [id])
+
+  proficiency ProficiencyLevel @default(INTERMEDIATE)
+  yearsExperience Int?
+
+  isEndorsed  Boolean @default(false)
+  endorsementCount Int @default(0)
+  isCertified Boolean @default(false)
+  certificationUrl String?
+
+  isPrimary   Boolean @default(false)
+  isActive    Boolean @default(true)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([providerId, skillId])
+  @@index([providerId])
+  @@index([skillId])
+  @@map("provider_skills")
+}
+
+enum ProficiencyLevel {
+  BEGINNER
+  INTERMEDIATE
+  EXPERT
+  MASTER
+}
+
+// ============================================================================
+// SERVICES
+// ============================================================================
+
+model Service {
+  id          String   @id @default(cuid())
+  providerId  String
+  provider    ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  title       String
+  slug        String
+  description String?
+  categoryId  String?
+  category    Skill?   @relation(fields: [categoryId], references: [id])
+
+  serviceType ServiceType @default(OFFLINE)
+
+  // Pricing
+  pricingModel PricingModel
+  basePrice    Float?
+  hourlyRate   Float?
+
+  // Availability
+  isAvailable Boolean @default(true)
+  maxConcurrentBookings Int @default(1)
+
+  // Media
+  images      Json?
+  videos      Json?
+
+  // Requirements
+  requirements String?
+  terms        String?
+
+  // Stats
+  totalBookings Int   @default(0)
+  totalRevenue  Float @default(0)
+  averageRating Float @default(0)
+
+  // SEO
+  metaTitle       String?
+  metaDescription String?
+
+  status      ServiceStatus @default(DRAFT)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  publishedAt DateTime?
+
+  bookings    Booking[]
+
+  @@unique([providerId, slug])
+  @@index([providerId])
+  @@index([categoryId])
+  @@index([status])
+  @@map("services")
+}
+
+enum ServiceType {
+  OFFLINE
+  ONLINE
+  HYBRID
+}
+
+enum PricingModel {
+  FIXED
+  HOURLY
+  DAILY
+  QUOTE
+  PERFORMANCE
+}
+
+enum ServiceStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+// ============================================================================
+// JOB POSTS (NEEDS)
+// ============================================================================
+
+model JobPost {
+  id          String   @id @default(cuid())
+  seekerId    String
+  seeker      User     @relation(fields: [seekerId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String
+  categoryId  String?
+  category    Skill?   @relation(fields: [categoryId], references: [id])
+
+  // Location
+  latitude    Float?
+  longitude   Float?
+  addressText String?
+  city        String?
+  state       String?
+  postalCode  String?
+  countryCode String?
+
+  serviceType ServiceType @default(OFFLINE)
+
+  // Budget
+  budgetType  BudgetType
+  budgetAmount Float?
+  budgetMin   Float?
+  budgetMax   Float?
+
+  // Timeline
+  urgency     UrgencyLevel @default(FLEXIBLE)
+  neededByDate DateTime?
+  estimatedDurationHours Int?
+
+  // Visibility
+  visibility  JobVisibility @default(PUBLIC)
+
+  // Attachments
+  attachments Json?
+
+  // Status
+  status      JobStatus @default(DRAFT)
+
+  // Matching Metadata
+  matchCount       Int @default(0)
+  viewCount        Int @default(0)
+  applicationCount Int @default(0)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  publishedAt DateTime?
+  expiresAt   DateTime?
+
+  bookings    Booking[]
+
+  @@index([seekerId])
+  @@index([categoryId])
+  @@index([status])
+  @@index([city, countryCode])
+  @@map("job_posts")
+}
+
+enum BudgetType {
+  FIXED
+  HOURLY
+  QUOTE
+  NEGOTIABLE
+}
+
+enum UrgencyLevel {
+  IMMEDIATE
+  TODAY
+  SCHEDULED
+  FLEXIBLE
+}
+
+enum JobVisibility {
+  PUBLIC
+  INVITED_ONLY
+  PRIVATE
+}
+
+enum JobStatus {
+  DRAFT
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+// ============================================================================
+// BOOKINGS / TRANSACTIONS
+// ============================================================================
+
+model Booking {
+  id          String   @id @default(cuid())
+
+  seekerId    String
+  seeker      User     @relation("SeekerBookings", fields: [seekerId], references: [id])
+
+  providerId  String
+  provider    ProviderProfile @relation(fields: [providerId], references: [id])
+
+  serviceId   String?
+  service     Service? @relation(fields: [serviceId], references: [id])
+
+  jobPostId   String?
+  jobPost     JobPost? @relation(fields: [jobPostId], references: [id])
+
+  title       String
+  description String?
+
+  // Pricing
+  pricingModel   PricingModel
+  totalAmount    Float
+  platformFee    Float
+  providerAmount Float
+
+  // Payment
+  paymentStatus PaymentStatus @default(PENDING)
+  escrowId      String?
+
+  // Schedule
+  scheduledStart DateTime?
+  scheduledEnd   DateTime?
+  actualStart    DateTime?
+  actualEnd      DateTime?
+
+  // Location
+  latitude       Float?
+  longitude      Float?
+  serviceAddress String?
+
+  // Status
+  status         BookingStatus @default(PENDING_ACCEPTANCE)
+
+  // Cancellation
+  cancelledById  String?
+  cancelledAt    DateTime?
+  cancellationReason String?
+
+  // Evidence
+  completionEvidence Json?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  confirmedAt DateTime?
+  completedAt DateTime?
+
+  reviews     Review[]
+
+  @@index([seekerId])
+  @@index([providerId])
+  @@index([status])
+  @@index([paymentStatus])
+  @@map("bookings")
+}
+
+enum PaymentStatus {
+  PENDING
+  HELD
+  RELEASED
+  REFUNDED
+  DISPUTED
+}
+
+enum BookingStatus {
+  PENDING_ACCEPTANCE
+  CONFIRMED
+  PAYMENT_HELD
+  IN_PROGRESS
+  COMPLETED
+  PAYMENT_RELEASED
+  CANCELLED
+  DISPUTED
+}
+
+// ============================================================================
+// REVIEWS & RATINGS
+// ============================================================================
+
+model Review {
+  id          String   @id @default(cuid())
+  bookingId   String
+  booking     Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  reviewerId  String
+  reviewer    User     @relation("ReviewsGiven", fields: [reviewerId], references: [id])
+
+  revieweeId  String
+  reviewee    User     @relation("ReviewsReceived", fields: [revieweeId], references: [id])
+
+  reviewerType ReviewerType
+
+  // Ratings
+  overallRating       Int
+  qualityRating       Int?
+  communicationRating Int?
+  punctualityRating   Int?
+  valueRating         Int?
+  professionalismRating Int?
+
+  // Content
+  title       String?
+  comment     String?
+  pros        String?
+  cons        String?
+
+  // Media
+  photos      Json?
+  videos      Json?
+
+  // Verification
+  isVerified  Boolean @default(true)
+
+  // Moderation
+  isFlagged   Boolean @default(false)
+  moderationStatus ModerationStatus @default(APPROVED)
+
+  // Response
+  response    String?
+  respondedAt DateTime?
+
+  // Engagement
+  helpfulCount Int @default(0)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([bookingId, reviewerId])
+  @@index([bookingId])
+  @@index([reviewerId])
+  @@index([revieweeId])
+  @@map("reviews")
+}
+
+enum ReviewerType {
+  SEEKER
+  PROVIDER
+}
+
+enum ModerationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// ============================================================================
+// MESSAGING SYSTEM
+// ============================================================================
+
+model Conversation {
+  id            String   @id @default(cuid())
+
+  participant1Id String
+  participant1   User    @relation("Participant1", fields: [participant1Id], references: [id])
+
+  participant2Id String
+  participant2   User    @relation("Participant2", fields: [participant2Id], references: [id])
+
+  bookingId     String?
+  jobPostId     String?
+
+  type          ConversationType @default(DIRECT)
+
+  isArchived    Boolean @default(false)
+  isBlocked     Boolean @default(false)
+  blockedById   String?
+
+  lastMessageAt DateTime?
+  lastMessagePreview String?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  messages      Message[]
+
+  @@unique([participant1Id, participant2Id])
+  @@index([participant1Id])
+  @@index([participant2Id])
+  @@map("conversations")
+}
+
+enum ConversationType {
+  DIRECT
+  SUPPORT
+  GROUP
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  senderId       String
+  sender         User     @relation(fields: [senderId], references: [id])
+
+  type           MessageType @default(TEXT)
+  content        String?
+  metadata       Json?
+
+  isRead         Boolean @default(false)
+  readAt         DateTime?
+
+  isDeleted      Boolean @default(false)
+  deletedAt      DateTime?
+
+  createdAt      DateTime @default(now())
+
+  @@index([conversationId, createdAt])
+  @@index([senderId])
+  @@map("messages")
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  VIDEO
+  AUDIO
+  FILE
+  SYSTEM
+}
+
+// ============================================================================
+// NOTIFICATIONS
+// ============================================================================
+
+model Notification {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type        String
+  title       String
+  message     String
+
+  actionUrl   String?
+  actionLabel String?
+
+  relatedEntityType String?
+  relatedEntityId   String?
+
+  channels    Json? // ["push", "email", "sms", "in_app"]
+
+  isRead      Boolean @default(false)
+  isSent      Boolean @default(false)
+  sentAt      DateTime?
+  readAt      DateTime?
+
+  priority    NotificationPriority @default(NORMAL)
+
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime?
+
+  @@index([userId, createdAt])
+  @@index([userId, isRead])
+  @@map("notifications")
+}
+
+enum NotificationPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
