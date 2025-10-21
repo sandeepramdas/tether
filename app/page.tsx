@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Navbar } from "@/components/layout/navbar";
 import { motion } from "framer-motion";
 import { Search, Users, Shield, Zap, Globe, TrendingUp } from "lucide-react";
 
@@ -41,6 +43,8 @@ export default function Home() {
 
   return (
     <div className="flex flex-col min-h-screen">
+      <Navbar />
+
       {/* Hero Section */}
       <motion.section
         initial={{ opacity: 0 }}
@@ -79,11 +83,11 @@ export default function Home() {
               transition={{ delay: 0.6, duration: 0.8 }}
               className="flex flex-col sm:flex-row gap-4 justify-center"
             >
-              <Button size="lg" className="text-lg px-8 py-6">
-                Find Services
+              <Button size="lg" className="text-lg px-8 py-6" asChild>
+                <Link href="/services">Find Services</Link>
               </Button>
-              <Button size="lg" variant="outline" className="text-lg px-8 py-6">
-                Offer Your Skills
+              <Button size="lg" variant="outline" className="text-lg px-8 py-6" asChild>
+                <Link href="/signup">Offer Your Skills</Link>
               </Button>
             </motion.div>
 
@@ -159,11 +163,11 @@ export default function Home() {
               Join thousands of providers and seekers already using Tether
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button size="lg" variant="secondary" className="text-lg px-8 py-6">
-                Sign Up Now
+              <Button size="lg" variant="secondary" className="text-lg px-8 py-6" asChild>
+                <Link href="/signup">Sign Up Now</Link>
               </Button>
-              <Button size="lg" variant="outline" className="text-lg px-8 py-6 border-primary-foreground text-primary-foreground hover:bg-primary-foreground/10">
-                Learn More
+              <Button size="lg" variant="outline" className="text-lg px-8 py-6 border-primary-foreground text-primary-foreground hover:bg-primary-foreground/10" asChild>
+                <Link href="/how-it-works">Learn More</Link>
               </Button>
             </div>
           </motion.div>
